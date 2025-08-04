@@ -16,6 +16,7 @@ Given the following application error log, extract and summarize the key debuggi
 --------------------
 
 Return a JSON object with the following fields:
+- timestamp: Timestamp of the error log in standard date time format
 - error_title: Short title for the error (e.g., NullReferenceException, TimeoutError)
 - error_code: Extract any error code (e.g., 400, ENOENT, etc.), if found
 - description: A readable summary of what this error means
