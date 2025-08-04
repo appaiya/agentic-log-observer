@@ -19,7 +19,6 @@ Return a JSON object with the following fields:
 - error_title: Short title for the error (e.g., NullReferenceException, TimeoutError)
 - error_code: Extract any error code (e.g., 400, ENOENT, etc.), if found
 - description: A readable summary of what this error means
-- stack_info: File, function, or line where the error occurred (if any)
 - probable_cause: Likely root cause of this issue
 
 Respond in pure JSON format only. Do not include any extra explanation.

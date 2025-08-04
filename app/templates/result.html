@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Log Summary</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    h1, h2 { text-align: center; }
+    .stats { text-align: center; margin-bottom: 20px; }
+    .card {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background-color: #f9f9f9;
+    }
+    pre {
+      background: #eee;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .back-button {
+      text-align: center;
+      margin-top: 30px;
+    }
+    .back-button a {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #007BFF;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .back-button a:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h1>Log Summary</h1>
+
+  <div class="stats">
+    <p><strong>File:</strong> {{ file_name }}</p>
+    <p>Total Logs: {{ summary.total_logs }}</p>
+    <p>Info Logs: {{ summary.info_count }}</p>
+    <p>Warnings: {{ summary.warnings | length }}</p>
+    <p>Errors: {{ summary.errors | length }}</p>
+  </div>
+
+  <h2>LLM Error Summaries</h2>
+  {% for result in llm_summary %}
+    <div class="card">
+      <pre>{{ result }}</pre>
+    </div>
+  {% endfor %}
+
+  <div class="back-button">
+    <a href="/">Upload Another Log File</a>
+  </div>
+</body>
+</html>
