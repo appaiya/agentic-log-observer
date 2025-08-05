@@ -59,6 +59,10 @@ Visit: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
+## 📽️ Demo
+
+A short demo video recording of this system availabe in demo folder
+
 ## 💡 Example Summary Output
 
 ```json
