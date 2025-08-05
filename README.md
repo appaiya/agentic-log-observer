@@ -70,9 +70,7 @@ A short demo video recording of this system availabe in demo folder
   "error_title": "NullReferenceException",
   "error_code": null,
   "description": "A null object was accessed during execution.",
-  "stack_info": "Function.Run() at line 42",
   "probable_cause": "Missing null check",
-  "suggested_fix": "Add guard clause before accessing variable"
 }
 ```
 
