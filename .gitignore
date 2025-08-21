@@ -3,3 +3,21 @@ __pycache__/
 uploads/
 test_logs/
 venv/
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+
+# Env
+.env.*
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
