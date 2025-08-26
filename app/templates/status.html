@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Analyzing…</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 32px; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    .bar { width: 100%; background: #eee; border-radius: 8px; overflow: hidden; height: 12px; }
+    .fill { height: 100%; width: 0%; background: #4F46E5; transition: width .3s ease; }
+    .muted { color: #666; font-size: 0.95rem; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; background: #fafafa; }
+    .badge { display:inline-block; padding: 2px 8px; border-radius: 999px; background:#eef; color:#334; font-size:.8rem; }
+    pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+    .btn { display:inline-block; padding:8px 14px; background:#0ea5e9; color:white; text-decoration:none; border-radius:8px; }
+    .btn:hover { background:#0284c7; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Analyzing: {{ file_name }}</h2>
+    <p class="muted">Job ID: {{ job_id }}</p>
+
+    <div class="bar"><div id="fill" class="fill"></div></div>
+    <p id="status" class="muted" style="margin-top:8px;">Starting…</p>
+
+    <h3 style="margin-top:20px;">Partial Results</h3>
+    <div id="results"></div>
+
+    <div id="actions" style="margin-top:16px; display:none;">
+      <a class="btn" id="viewFinal" href="#">View full summary</a>
+      <a class="btn" href="/">Upload another file</a>
+    </div>
+  </div>
+
+  <script>
+    const jobId = "{{ job_id }}";
+    const fill = document.getElementById("fill");
+    const statusEl = document.getElementById("status");
+    const resultsEl = document.getElementById("results");
+    const actionsEl = document.getElementById("actions");
+    const viewFinal = document.getElementById("viewFinal");
+
+    let shown = 0;
+
+    function renderCard(item, idx) {
+      // item is the dict returned by LLM
+      const title = item.error_name || "Summary";
+      const code = item.error_code || "—";
+      const time = item.time || "—";
+      const desc = item.description || "";
+      const cause = item.possible_cause || "";
+
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div class="badge">#${idx}</div>
+        <strong style="margin-left:8px">${title}</strong> <span class="muted">[code: ${code}]</span><br/>
+        <span class="muted">time: ${time}</span>
+        <div style="margin-top:8px"><pre>${desc}</pre></div>
+        ${cause ? `<div style="margin-top:6px"><em>Possible cause:</em> ${cause}</div>` : "" }
+      `;
+      return div;
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch(`/summary/${jobId}`);
+        if (!res.ok) throw new Error("poll failed");
+        const data = await res.json();
+
+        fill.style.width = `${data.progress || 0}%`;
+        statusEl.textContent =
+          `Status: ${data.status} • ${data.processed_errors}/${data.total_errors} summarized`;
+
+        // append any new items we haven't shown yet
+        const items = data.partial_llm_summary || [];
+        while (shown < items.length) {
+          resultsEl.appendChild(renderCard(items[shown], shown + 1));
+          shown++;
+        }
+
+        if (data.status === "completed") {
+          actionsEl.style.display = "block";
+          viewFinal.href = `/result/${jobId}`;
+          return; // stop polling
+        }
+        if (data.status === "failed") {
+          const err = document.createElement("div");
+          err.className = "card";
+          err.innerHTML = `<strong>Error:</strong> ${data.error || "Unknown error"}`;
+          resultsEl.appendChild(err);
+          actionsEl.style.display = "block";
+          return;
+        }
+      } catch (e) {
+        statusEl.textContent = "Network issue while polling… retrying";
+      }
+      setTimeout(poll, 1200);
+    }
+    poll();
+  </script>
+</body>
+</html>

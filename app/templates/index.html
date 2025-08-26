@@ -1,28 +1,210 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Log Monitoring System</title>
+  <meta charset="utf-8" />
+  <title>Agentic Log Observer</title>
   <style>
-    body { font-family: sans-serif; text-align: center; padding-top: 40px; }
-    form { display: inline-block; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
-    input[type="file"] { margin-bottom: 10px; }
-    button { padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; }
-    button:hover { background-color: #45a049; }
-    .loader { display: none; margin-top: 10px; font-weight: bold; }
+    :root {
+      --bg:#0b1020;
+      --panel:#0f172a;
+      --muted:#9aa6b2;
+      --text:#e5eef5;
+      --accent:#22c55e;
+      --brand:#4F46E5;
+      --card:#0f172a;
+      --chip:#1f2937;
+      --border:#1f2a44;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; padding:32px; font-family: ui-sans-serif, system-ui, Arial; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+
+    /* panel / header */
+    .panel {
+      background: linear-gradient(180deg, rgba(79,70,229,.15), transparent 40%) , var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    h1 { margin: 0 0 8px 0; font-size: 24px; }
+    .muted { color: var(--muted); }
+
+    /* form */
+    form { display:flex; gap:12px; align-items:center; flex-wrap: wrap; }
+    input[type="file"] {
+      color: var(--text);
+      background: #0b1224;
+      border: 1px dashed var(--border);
+      padding: 10px;
+      border-radius: 10px;
+      max-width: 420px;
+      width: 100%;
+    }
+    button {
+      padding: 10px 16px; border: 0; background: var(--accent);
+      color:#04130a; border-radius: 10px; font-weight: 600; cursor: pointer;
+    }
+    button[disabled]{ opacity:.6; cursor:not-allowed; }
+
+    /* loader + progress */
+    .loader { display:none; margin-top:10px; font-weight:600; }
+    .bar { width:100%; height:10px; border-radius:6px; overflow:hidden; background:#111a2a; border:1px solid var(--border); display:none; }
+    .fill { height:100%; width:0%; background: var(--brand); transition: width .3s ease; }
+
+    /* stats chips */
+    .chips { display:flex; gap:8px; flex-wrap: wrap; margin-top: 10px; }
+    .chip { background:var(--chip); border:1px solid var(--border); color:var(--muted); padding:6px 10px; border-radius:999px; font-size:.85rem; }
+
+    /* grid of cards */
+    .grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 1px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03);
+    }
+    .title { font-weight:700; }
+    .subtle { font-size:.9rem; color: var(--muted); }
+    .code { display:inline-block; background:#0b1224; border:1px solid var(--border); padding:2px 8px; border-radius: 999px; font-size:.8rem; color:#9fb3c8; }
+    .section { margin-top:8px; }
+    pre { margin:0; white-space: pre-wrap; word-break: break-word; color:#d7e3ef; }
   </style>
 </head>
 <body>
-  <h1>Upload Your Log File</h1>
-  <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" accept=".json" required /><br/>
-    <button type="submit" id="analyzeBtn">Analyze</button>
-    <div class="loader" id="loader">Analyzing... Please wait ⏳</div>
-  </form>
+  <div class="wrap">
+    <div class="panel">
+      <h1>Agentic Log Observer</h1>
+      <div class="muted">Upload a PT1H (NDJSON) file. We’ll stream summaries as they’re ready.</div>
+
+      <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="file" name="file" accept=".json" required />
+        <button id="analyzeBtn" type="submit">Analyze</button>
+        <div id="loader" class="loader">⏳ Uploading & starting analysis…</div>
+        <div class="bar" id="bar"><div id="fill" class="fill"></div></div>
+      </form>
+
+      <div id="chips" class="chips" style="display:none;"></div>
+    </div>
+
+    <h3 id="partialHeader" style="display:none; margin:16px 4px;">Summaries</h3>
+    <div id="results" class="grid"></div>
+  </div>
 
   <script>
-    document.getElementById("uploadForm").addEventListener("submit", function () {
-      document.getElementById("analyzeBtn").disabled = true;
-      document.getElementById("loader").style.display = "block";
+    const form = document.getElementById("uploadForm");
+    const btn = document.getElementById("analyzeBtn");
+    const loader = document.getElementById("loader");
+    const bar = document.getElementById("bar");
+    const fill = document.getElementById("fill");
+    const header = document.getElementById("partialHeader");
+    const grid = document.getElementById("results");
+    const chips = document.getElementById("chips");
+
+    let polling = false;
+    let shown = 0;
+
+    function fmtTime(t) {
+      if (!t) return "—";
+      try { return new Date(t).toLocaleString(); } catch { return t; }
+    }
+
+    function renderCard(item, idx) {
+      const title = item.error_name || "Summary";
+      const code = item.error_code || "—";
+      const time = fmtTime(item.time);
+      const desc = item.description || "";
+      const cause = item.possible_cause || "";
+
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div class="title">#${idx} ${title} <span class="code">code: ${code}</span></div>
+        <div class="subtle">time: ${time}</div>
+        <div class="section"><pre>${desc}</pre></div>
+        ${cause ? `<div class="section subtle"><strong>Possible cause:</strong> ${cause}</div>` : "" }
+      `;
+      return div;
+    }
+
+    function renderChips(fileName, status, processed, total) {
+      chips.style.display = "flex";
+      chips.innerHTML = `
+        <span class="chip"><strong>File:</strong>&nbsp;${fileName}</span>
+        <span class="chip"><strong>Status:</strong>&nbsp;${status}</span>
+        <span class="chip"><strong>Progress:</strong>&nbsp;${processed}/${total}</span>
+      `;
+    }
+
+    async function poll(jobId) {
+      if (polling) return;
+      polling = true;
+      header.style.display = "block";
+      bar.style.display = "block";
+
+      const tick = async () => {
+        try {
+          const res = await fetch(`/summary/${jobId}`);
+          const data = await res.json();
+
+          // progress + chips
+          fill.style.width = `${data.progress || 0}%`;
+          renderChips(data.file_name, data.status, data.processed_errors, data.total_errors);
+
+          // append any new items
+          const items = data.partial_llm_summary || [];
+          while (shown < items.length) {
+            grid.appendChild(renderCard(items[shown], shown + 1));
+            shown++;
+          }
+
+          if (data.status === "completed" || data.status === "failed") {
+            loader.style.display = "none";
+            btn.disabled = false;
+            polling = false;
+            return; // stop
+          }
+        } catch (e) { /* ignore and retry */ }
+        setTimeout(tick, 1200);
+      };
+      tick();
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      // reset UI
+      loader.style.display = "block";
+      btn.disabled = true;
+      bar.style.display = "none";
+      fill.style.width = "0%";
+      header.style.display = "none";
+      grid.innerHTML = "";
+      chips.style.display = "none";
+      shown = 0;
+
+      const fd = new FormData(form);
+      try {
+        const res = await fetch("/upload", { method: "POST", body: fd });
+        if (!res.ok) throw new Error("Upload failed");
+        const data = await res.json(); // { job_id, file_name }
+        loader.textContent = "Analyzing… streaming results";
+        poll(data.job_id);
+      } catch (err) {
+        loader.textContent = "Upload/analysis failed. Please try again.";
+        btn.disabled = false;
+      }
     });
   </script>
 </body>
